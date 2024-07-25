@@ -1,0 +1,83 @@
+{
+    "CNN":{
+            "layers": 2,
+            "in_channels": 3,
+            "channels": [
+                32,
+                64
+                
+            ],
+            "linear_size": 64,
+            "kernel_size": [
+                [
+                    3,
+                    3
+                ], 
+                [
+                    3,
+                    3
+                ],
+                [
+                    3,
+                    3
+                ]
+            ],
+            "strides": [
+                1,
+                1,
+                1
+            ],
+            "padding": 1,
+            "activation": "relu",
+            "pool_size": [
+                2,
+                2,
+                2
+            ],
+            "pooling": [
+                true,
+                true,
+                true
+            ],
+            "drop_prob": 0.3
+        },
+
+    "ResNet":{
+        "model_string":"pytorch/vision:v0.10.0",
+        "norm_mean":[0.485, 0.456, 0.406],
+        "norm_std" :[0.229, 0.224, 0.225], 
+        "depth" :"resnet18", 
+        "pretrained": false
+
+    }
+
+
+
+
+    ,
+    "relation_linear":{
+        "layers": [32,12],
+        "out_features": 4,
+        "in_features": 64,
+        "drop_prob": 0.3
+    }
+    ,
+    "projection_head":{
+        "layers":[3000],
+        "out_features":[1000],
+        "in_features":[1000],
+        "drop_prob":0
+    },
+
+    "linear_contrastive":{
+        "layers": [32,12],
+        "out_features": 4,
+        "in_features": 64,
+        "drop_prob": 0.3
+    },
+
+    "self_attention_num_heads": 4,
+    "self_attention_embed_dim": 1000
+
+}
+

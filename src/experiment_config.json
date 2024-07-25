@@ -1,7 +1,7 @@
 {
     "model_version":"Choose from 'exactly_as_in_paper', 'linear_in_few_shot_only', 'linear_in_both_few_shot_and_contrastive'",
     "training_version": "Could be 'as_in_paper', 'train_heads_and_feature_extraction_seperately'",
-    "feature_extraction_model":"Could be 'path_to_cnn_config' , 'path_to_resnet_config'",
+    "encoder":"ResNet",
     "attention_model":"path_to_attention_config",
     "relation_model":"path_to_relation_mlp_module",
     "h_projection_mlp":"path_to_projection_mlp_for_contrastive loss"
