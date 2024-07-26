@@ -99,28 +99,20 @@ class ResNet(nn.Module):
         return x_out
     
 class SelfAttention(nn.Module):
-    def __init__(self, model_config, shuffle):
+    def __init__(self, model_config):
         super(SelfAttention, self).__init__()
         self.embed_dim = model_config['self_attention_embed_dim']
         self.num_heads = model_config['self_attention_num_heads']
         self.multihead_attn = nn.MultiheadAttention(self.embed_dim, self.num_heads)
-        self.shuffle = shuffle
         
-    def forward(self,feature_list):
-        ## list_of_xs of shape batch_size, D each
-        augmentations = feature_list[1:]
-        if self.shuffle:
-            random.shuffle(augmentations)
-        
-        x = torch.stack([feature_list[0]] + augmentations, dim=1)  # (batch_size, augmentations+original, embed_dim)
+    def forward(self,x):
         x = x.permute(1, 0, 2)  # (augmentations+original, batch_size, embed_dim)
-        
         attn_output, _ = self.multihead_attn(x, x, x)
         attn_output = attn_output.permute(1, 0, 2)  # (batch_size, augmentations+original, embed_dim)
         
         # Flatten the output to get the final embedding of dimension augmentations+original*D
         batch_size, seq_length, embed_dim = attn_output.shape
-        output = attn_output.reshape(batch_size, seq_length * embed_dim)  # (batch_size, (augmentations+original) * embed_dim)
+        output = attn_output.reshape(batch_size, seq_length * embed_dim)  # (batch_size, (augmentations+original) * D)
         
         return output
     

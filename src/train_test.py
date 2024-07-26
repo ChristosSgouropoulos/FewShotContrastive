@@ -28,5 +28,5 @@ train_loader = DataLoader(
         collate_fn=train_sampler.episodic_collate_fn,
     )
 for batch in train_loader:
-    print(batch[0].size())
+    print(batch[3])
     break
