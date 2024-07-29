@@ -9,14 +9,12 @@ from typing import List
 from torchvision import transforms
 
 class MLP(nn.Module):
-    def __init__(self,in_features: int, layers: List[int], drop_prob: float, out_features: int):
+    def __init__(self,model_config,purpose):
         super(MLP,self).__init__()
-
-        self.in_features = in_features
-        self.out_features = out_features
-        self.layers = layers
-        self.drop_prob = drop_prob
-
+        self.in_features = model_config[purpose]['in_features']
+        self.out_features = model_config[purpose]['out_features']
+        self.layers = model_config[purpose]['layers']
+        self.drop_prob = model_config[purpose]['drop_prob']
         self.mlp = self._create_network()
 
     def _create_network(self):
