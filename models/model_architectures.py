@@ -15,15 +15,18 @@ class MLP(nn.Module):
         self.out_features = model_config[purpose]['out_features']
         self.layers = model_config[purpose]['layers']
         self.drop_prob = model_config[purpose]['drop_prob']
+        self.purpose = purpose
         self.mlp = self._create_network()
+        
 
     def _create_network(self):
         modules = []
         in_features = self.in_features
         for out_feature in self.layers:
             modules.append(nn.Linear(in_features = in_features, out_features = out_feature, bias = False))
-            modules.append(nn.BatchNorm1d(num_features = out_feature))
-            modules.append(nn.Dropout(p = self.drop_prob))
+            if self.purpose !='projection_head':
+                modules.append(nn.BatchNorm1d(num_features = out_feature))
+                modules.append(nn.Dropout(p = self.drop_prob))
             in_features = out_feature
 
         modules.append(nn.Linear(in_features = in_features, out_features = self.out_features))

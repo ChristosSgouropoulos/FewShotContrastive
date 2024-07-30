@@ -63,9 +63,9 @@
     }
     ,
     "projection_head":{
-        "layers":[3000],
-        "out_features":[1000],
-        "in_features":[1000],
+        "layers":[4000,6000],
+        "out_features":4000,
+        "in_features":4000,
         "drop_prob":0
     },
 

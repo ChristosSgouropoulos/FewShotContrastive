@@ -7,12 +7,11 @@ import torch.nn as nn
 import json
 from models.model_architectures import CNN,MLP,SelfAttention,ResNet
 from utils.augmentations import image_augmentations,audio_augmentations
-from model_architectures import MLP,CNN,ResNet
 
 
 class EncoderModule(nn.Module):
     def __init__(self,config_file,augmentation_module):
-        super(self,EncoderModule).__init__()
+        super(EncoderModule, self).__init__()
         self.augmentation_module = augmentation_module
         self.config_file = config_file
         self.encoder, self.model_config = get_encoder(encoder_name = self.config_file['encoder'])

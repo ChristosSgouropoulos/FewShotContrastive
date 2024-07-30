@@ -9,12 +9,12 @@ def FSL_loss(prototypes, query_features,query_labels):
         query_label = query_labels[i]
         ## The numerator will be the Euclidean distance of the query_feature with the prototype of the same label
         prototype_of_same_label = prototypes[query_label]
-        numerator = torch.exp(-torch.cdist(query_feature, prototype_of_same_label, p=2.0, compute_mode='use_mm_for_euclid_dist_if_necessary'))
+        numerator = torch.exp(-torch.cdist(query_feature.unsqueeze(0), prototype_of_same_label.unsqueeze(0), p=2.0, compute_mode='use_mm_for_euclid_dist_if_necessary'))
         ## Now the denominator will be calculated using the sum of the distances of the query feature with all the prototype classes
         denominator = 0
         for j in range(len(prototypes)):
             prototype = prototypes[j]
-            to_sum = torch.exp(-torch.cdist(query_feature,prototype, p= 2.0,compute_mode='use_mm_for_euclid_dist_if_necessary'))
+            to_sum = torch.exp(-torch.cdist(query_feature.unsqueeze(0),prototype.unsqueeze(0), p= 2.0,compute_mode='use_mm_for_euclid_dist_if_necessary'))
             denominator = denominator + to_sum
         instance_loss = -torch.log(numerator/denominator)
         batch_loss = batch_loss + instance_loss
@@ -24,14 +24,16 @@ def FSL_loss(prototypes, query_features,query_labels):
 
 def cos_similarity(prototype,query_feature_contrastive, projection_head_model, hyperparameter_T):
     """Prototype of dim D, query_feature of Dimension D"""
-    
-    projected_query_feature = projection_head_model(query_feature_contrastive)
+    projected_query_feature = projection_head_model(query_feature_contrastive.unsqueeze(0))
     cos = nn.CosineSimilarity()
-    cosim = torch.exp(cos(prototype, projected_query_feature)/hyperparameter_T)
+    cosim = torch.exp(cos(prototype.unsqueeze(0), projected_query_feature)/hyperparameter_T)
     
     return cosim
 
 
+
+def calculate_final_loss(few_shot_loss, contrastive_loss,hyperparameter_lambda):
+    return few_shot_loss + hyperparameter_lambda*contrastive_loss
+
 if __name__ =='__main__':
-    prototypes = torch.rand(5,200)
-    print(prototypes[1].size()) 
+    pass
