@@ -32,8 +32,5 @@ def cos_similarity(prototype,query_feature_contrastive, projection_head_model, h
 
 
 
-def calculate_final_loss(few_shot_loss, contrastive_loss,hyperparameter_lambda):
-    return few_shot_loss + hyperparameter_lambda*contrastive_loss
-
 if __name__ =='__main__':
     pass

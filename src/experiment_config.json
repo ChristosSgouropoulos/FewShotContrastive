@@ -5,6 +5,8 @@
     "attention_model":"path_to_attention_config",
     "relation_model":"path_to_relation_mlp_module",
     "h_projection_mlp":"path_to_projection_mlp_for_contrastive loss",
-    "epochs":5
-
+    "epochs":5,
+    "n_way":5,
+    "k_shots":5,
+    "num_episodes":100
 }

@@ -21,17 +21,25 @@ from loops.training_loop import training_loop
 
 mini_imagenet_path = "data/mini_imagenet/images"
 train_set = MiniImageNet(root=mini_imagenet_path, split="train", training=True)
-train_sampler = TaskSampler(train_set, n_way=3, n_shot=3, n_query= 6, n_tasks=100)
+train_sampler = TaskSampler(train_set, n_way=5, n_shot=5, n_query= 15, n_tasks=100)
 train_loader = DataLoader(
         train_set,
         batch_sampler=train_sampler,
         pin_memory=True,
         collate_fn=train_sampler.episodic_collate_fn,
+
     )
 
+
+validation_set = MiniImageNet(root = mini_imagenet_path, split = "val", training = False)
+validation_sampler = TaskSampler(train_set, n_way = 5, n_shot = 5, n_query = 15, n_tasks = 50)
+validation_loader = DataLoader(validation_set, batch_sampler = validation_sampler, pin_memory = True, collate_fn = validation_sampler.episodic_collate_fn)
 training_loop(train_loader= train_loader, 
+              validation_loader = validation_loader,
                experiment_config = 'src/experiment_config.json',
-               hyperparameter_m = 4, 
+               hyperparameter_m = 6, 
                hyperparameter_T = 1,
                hyperparameter_lambda = 0.1)
+
+
 

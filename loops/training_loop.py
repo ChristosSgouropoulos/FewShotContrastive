@@ -5,14 +5,17 @@ from datasets.task_sampler import TaskSampler
 from torch.utils.data import DataLoader
 from models.model_architectures import SelfAttention,MLP
 from models.main_models import EncoderModule, get_encoder
+from loops.testing_loop import prototypical_inference
 from utils.augmentations import image_augmentations
-from loops.loss import FSL_loss,cos_similarity,calculate_final_loss
+from loops.loss import FSL_loss,cos_similarity
+from sklearn.metrics import accuracy_score
 import random
+import numpy as np
 from tqdm import tqdm
 import torch
 import json 
 
-def training_loop(train_loader,experiment_config, hyperparameter_m, hyperparameter_T,hyperparameter_lambda):
+def training_loop(train_loader,validation_loader,experiment_config, hyperparameter_m, hyperparameter_T,hyperparameter_lambda, device):
     with open(experiment_config, "r") as f:
         experiment_config = json.load(f)   
     epochs = experiment_config['epochs'] 
@@ -26,11 +29,13 @@ def training_loop(train_loader,experiment_config, hyperparameter_m, hyperparamet
     projection_network = MLP(model_config=model_config, purpose = "projection_head")
     model_parameters = list(encoder.parameters()) + list(attention_layer.parameters()) + list(projection_network.parameters())
     optimizer = torch.optim.Adam(model_parameters, lr = 0.001)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     ## Iterate data loader 
     encoder.train()
     attention_layer.train()
     projection_network.train()
     for epoch in range(epochs):
+        epoch_loss = 0
         with tqdm(enumerate(train_loader), total = len(train_loader), desc= "Training") as tqdm_train:
             for few_shot_batch in tqdm_train:
                 episode_index = few_shot_batch[0]
@@ -44,7 +49,6 @@ def training_loop(train_loader,experiment_config, hyperparameter_m, hyperparamet
                 ## Unique sorts labels 
                 unique_labels = support_labels.unique()
                 prototype_list = []
-                print("unique_labels",unique_labels)
                 for label in unique_labels:
                     # Get indices of features belonging to the current label
                     label_indices = (support_labels == label).nonzero(as_tuple=True)[0]
@@ -63,7 +67,6 @@ def training_loop(train_loader,experiment_config, hyperparameter_m, hyperparamet
                 fewshot_loss = FSL_loss(prototypes = stacked_prototypes, query_features = sorted_query_features,query_labels = sorted_query_labels)
                 ## Now lets start making the contrastive part
                 ## Query features will again pass through the feature extractor get shuffled and pass through the attention layer again:
-                print("fewshot_loss", fewshot_loss)
                 augmentations = query_feature_list[1:]
                 random.shuffle(augmentations)
                 shuffled_query_features = torch.stack([query_feature_list[0]] + augmentations, dim=1) # (batch_size, augmentations+original, embed_dim)
@@ -97,6 +100,49 @@ def training_loop(train_loader,experiment_config, hyperparameter_m, hyperparamet
                 print(final_loss)
                 final_loss.backward()
                 optimizer.step()
+                epoch_loss +=final_loss
+        scheduler.step()
+        epoch_loss = epoch_loss/len(train_loader)
+        print(f"epoch: {epoch}, mean loss : {epoch_loss}")
+
+        ### Validation Inference and evalutation
+        encoder.eval()
+        attention_layer.eval()
+        accuracy_list = []
+        with torch.inference_mode():
+            with tqdm(enumerate(validation_loader), total = len(validation_loader), desc= "Validation") as tqdm_val:
+                for few_shot_batch in tqdm_val:
+                    episode_index = few_shot_batch[0]
+                    support_input,support_labels,query_input,query_labels,_ = few_shot_batch[1]
+                    support_feature_list = encoder(support_input)
+                    support_features = torch.stack(support_feature_list, dim=1)
+                    support_features = attention_layer(support_features) ### [batch_size, (len(augmentations)+1)*D]
+                    ## Compute prototypes
+                    ## Unique sorts labels 
+                    unique_labels = support_labels.unique()
+                    prototype_list = []
+                    for label in unique_labels:
+                    # Get indices of features belonging to the current label
+                        label_indices = (support_labels == label).nonzero(as_tuple=True)[0]
+                        label_features = support_features[label_indices]
+                        prototype = label_features.mean(dim=0)
+                        prototype_list.append(prototype)
+                    stacked_prototypes = torch.stack(prototype_list, dim = 0) ## [num_of_classses,D]
+                    ## Now forward pass query set
+                    query_feature_list = encoder(query_input)
+                    query_features = torch.stack(query_feature_list,dim = 1)
+                    query_features = attention_layer(query_features)
+                    ## Okay now need to sort query features by the labels
+                    sorted_query_labels, indices = torch.sort(query_labels)
+                    sorted_query_features = query_features[indices]
+                    predictions = prototypical_inference(sorted_query_features = sorted_query_features, prototypes = prototype_list)
+
+                    ## Compute validation accuracy:
+                    episode_accuracy = accuracy_score(predictions,sorted_query_labels)
+                    accuracy_list.append(episode_accuracy)
+        mean_accuracy = np.mean(accuracy_list)
+        print(f"Mean Validation Accuracy for epoch: {epoch} is ::: {mean_accuracy}")
+
 
 
 
