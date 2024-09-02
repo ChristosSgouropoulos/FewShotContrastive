@@ -2,14 +2,12 @@ import os
 import sys 
 sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pathlib import Path
-from typing import Callable, List, Optional, Union
+from typing import  List, Optional, Union
 import pandas as pd
 import torch
 from pandas import DataFrame
 from PIL import Image
 import torchvision.transforms as transforms
-from torch import Tensor
-from tqdm import tqdm
 from datasets.few_shot_dataset import FewShotDataset
 
 MINI_IMAGENET_SPECS_DIR = Path("data/mini_imagenet")
@@ -20,11 +18,6 @@ class MiniImageNet(FewShotDataset):
         root: Union[Path, str],
         split: Optional[str] = None,
         specs_file: Optional[Union[Path, str]] = None,
-        image_size: int = 128,
-        load_on_ram: bool = False,
-        loading_transform: Optional[Callable] = None,
-        transform: Optional[Callable] = None,
-        training: bool = False,
     ):
         """
         Build the miniImageNet dataset from specific specs file. By default all images are loaded
@@ -54,10 +47,9 @@ class MiniImageNet(FewShotDataset):
         """
         self.root = Path(root)
         self.data_df = self.load_specs(split, specs_file)
-        self.load_on_ram = load_on_ram
         self.images = self.data_df.image_path.tolist()
 
-        self.class_names = self.data_df.class_name.unique()
+        self.class_names = self.data_df.label.unique()
         self.class_to_label = {v: k for k, v in enumerate(self.class_names)}
         self.labels = self.get_labels()
 
@@ -66,7 +58,7 @@ class MiniImageNet(FewShotDataset):
 
     def __getitem__(self, item):
         transform = transforms.Compose([
-        transforms.Resize((256, 256)), 
+        transforms.Resize((84, 84)), 
         transforms.ToTensor()])
         img = Image.open(self.data_df.image_path[item]).convert("RGB")
         tensor_img = transform(img)
@@ -100,7 +92,49 @@ class MiniImageNet(FewShotDataset):
         specs_file = (specs_file if specs_file else MINI_IMAGENET_SPECS_DIR / f"{split}.csv")
 
         return pd.read_csv(specs_file).assign(
-            image_path=lambda df: df.apply(lambda row: self.root / row["class_name"] / row["image_name"], axis=1))
+            image_path=lambda df: df.apply(lambda row: self.root / row["filename"], axis=1))
 
     def get_labels(self) -> List[int]:
-        return list(self.data_df.class_name.map(self.class_to_label))
+        return list(self.data_df.label.map(self.class_to_label))
+    
+    
+    def split_train_validation(self, train_percentage: float):
+        """
+        Splits the dataset into training and validation subsets for each class,
+        keeping all classes in both subsets.
+
+        Args:
+            train_percentage (float): The percentage of data rows within each class to use for training.
+        
+        Returns:
+            train_set (MiniImageNet_84): A subset of the dataset for training.
+            val_set (MiniImageNet_84): A subset of the dataset for validation.
+        """
+        if not (0 < train_percentage < 1):
+            raise ValueError("train_percentage must be between 0 and 1")
+
+        # Group the data by class
+        grouped = self.data_df.groupby('label')
+        
+        train_indices = []
+        val_indices = []
+
+        # Split the indices for each class
+        for _, group in grouped:
+            indices = group.index.tolist()
+            split_point = int(train_percentage * len(indices))
+            train_indices.extend(indices[:split_point])
+            val_indices.extend(indices[split_point:])
+        
+        # Create the training and validation datasets
+        train_set = torch.utils.data.Subset(self, train_indices)
+        val_set = torch.utils.data.Subset(self, val_indices)
+        
+        return train_set, val_set
+    
+
+
+
+    
+if __name__ == '__main__':
+    pass

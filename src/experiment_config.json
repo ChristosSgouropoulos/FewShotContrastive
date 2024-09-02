@@ -5,8 +5,11 @@
     "attention_model":"path_to_attention_config",
     "relation_model":"path_to_relation_mlp_module",
     "h_projection_mlp":"path_to_projection_mlp_for_contrastive loss",
-    "epochs":5,
+    "epochs":300,
     "n_way":5,
     "k_shots":5,
-    "num_episodes":100
+    "num_episodes":100,
+    "encoder_pt":"experiments/encoder_100tasks_300_epochs.pt",
+    "attention_pt":"experiments/attention_100tasks_300_epochs.pt",
+    "projection_head_pt":"experiments/projection_100_tasks_300_epochs.pt"
 }

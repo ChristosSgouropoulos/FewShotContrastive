@@ -5,7 +5,7 @@ import torch
 import random
 import torch.nn as nn
 import json
-from models.model_architectures import CNN,MLP,SelfAttention,ResNet
+from models.model_architectures import CNN,MLP,SelfAttention,Res12
 from utils.augmentations import image_augmentations,audio_augmentations
 
 
@@ -31,13 +31,28 @@ class EncoderModule(nn.Module):
         return self.model_config
 
 
+class EncoderLinearSoftmax(nn.Module):
+    def __init__(self,config_file):
+        super(EncoderLinearSoftmax,self).__init__()
+        self.config_file = config_file
+        self.encoder ,self.model_config = get_encoder(encoder_name = config_file['encoder'])
+        self.linear = nn.Linear(640, 64)  # Example input size of 1024
+        self.relu = nn.ReLU()
+
+    def forward(self,x):
+        encoded = self.encoder(x)
+        out = self.relu(self.linear(encoded))
+        return out
+
+
+
 def get_encoder(encoder_name):
     with open("models/model_params.json", "r") as f:
         model_config = json.load(f)
     if encoder_name == 'CNN':
         encoder = CNN(model_config = model_config)
     elif encoder_name == 'ResNet':
-        encoder = ResNet(model_config = model_config)
+        encoder = Res12(model_config = model_config)
     return encoder,model_config
 
 

@@ -1,10 +1,8 @@
 import os
 import sys
 sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from datasets.task_sampler import TaskSampler
-from torch.utils.data import DataLoader
 from models.model_architectures import SelfAttention,MLP
-from models.main_models import EncoderModule, get_encoder
+from models.main_models import EncoderModule
 from loops.testing_loop import prototypical_inference
 from utils.augmentations import image_augmentations
 from loops.loss import FSL_loss,cos_similarity
@@ -15,22 +13,29 @@ from tqdm import tqdm
 import torch
 import json 
 
-def training_loop(train_loader,validation_loader,experiment_config, hyperparameter_m, hyperparameter_T,hyperparameter_lambda, device):
+def training_loop(train_loader,validation_loader,experiment_config, hyperparameter_m, hyperparameter_T,hyperparameter_lambda,encoder_weights, device):
     with open(experiment_config, "r") as f:
         experiment_config = json.load(f)   
     epochs = experiment_config['epochs'] 
     ## Get the encoder
-    encoder = EncoderModule(config_file = experiment_config,augmentation_module = image_augmentations)
-    ## Get the model_config dictionary to use for attention
+    encoder = EncoderModule(config_file = experiment_config,augmentation_module = image_augmentations).to(device)
+    if encoder_weights:
+        state_dict = torch.load(encoder_weights)
+        new_state_dict = {}
+        for key in state_dict:
+            new_key = "encoder." + key  # Prepend 'encoder.' to each key
+            new_state_dict[new_key] = state_dict[key]
+        encoder.load_state_dict(new_state_dict)
+        ## Get the model_config dictionary to use for attention
     model_config = encoder._get_model_config()
-    ## Initialize attention layer
-    attention_layer = SelfAttention(model_config = model_config)
+    attention_layer = SelfAttention(model_config = model_config).to(device)
     ## Initialize contrastive projection head
-    projection_network = MLP(model_config=model_config, purpose = "projection_head")
+    projection_network = MLP(model_config=model_config, purpose = "projection_head").to(device)
     model_parameters = list(encoder.parameters()) + list(attention_layer.parameters()) + list(projection_network.parameters())
     optimizer = torch.optim.Adam(model_parameters, lr = 0.001)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     ## Iterate data loader 
+    best_accuracy = 0
     encoder.train()
     attention_layer.train()
     projection_network.train()
@@ -42,6 +47,12 @@ def training_loop(train_loader,validation_loader,experiment_config, hyperparamet
                 support_input,support_labels,query_input,query_labels,_ = few_shot_batch[1]
                 final_loss =  0 
                 optimizer.zero_grad()
+
+                support_input = support_input.to(device)
+                support_labels = support_labels.to(device)
+                query_input = query_input.to(device)
+                query_labels = query_labels.to(device)
+
                 support_feature_list = encoder(support_input)
                 support_features = torch.stack(support_feature_list, dim=1)
                 support_features = attention_layer(support_features) ### [batch_size, (len(augmentations)+1)*D]
@@ -95,16 +106,13 @@ def training_loop(train_loader,validation_loader,experiment_config, hyperparamet
                                                                         hyperparameter_T = hyperparameter_T)
                         contrastive_loss = contrastive_loss + (-torch.log(sim_positive/(sim_positive + sim_negative)))
 
-                contrastive_loss = 1/(len(unique_labels)*len(query_features_contrastive))
+                contrastive_loss = contrastive_loss/(len(unique_labels)*len(query_features_contrastive))
                 final_loss = fewshot_loss+ hyperparameter_lambda*contrastive_loss
-                print(final_loss)
                 final_loss.backward()
                 optimizer.step()
                 epoch_loss +=final_loss
         scheduler.step()
         epoch_loss = epoch_loss/len(train_loader)
-        print(f"epoch: {epoch}, mean loss : {epoch_loss}")
-
         ### Validation Inference and evalutation
         encoder.eval()
         attention_layer.eval()
@@ -114,6 +122,10 @@ def training_loop(train_loader,validation_loader,experiment_config, hyperparamet
                 for few_shot_batch in tqdm_val:
                     episode_index = few_shot_batch[0]
                     support_input,support_labels,query_input,query_labels,_ = few_shot_batch[1]
+                    support_input = support_input.to(device)
+                    support_labels = support_labels.to(device)
+                    query_input = query_input.to(device)
+                    query_labels = query_labels.to(device)
                     support_feature_list = encoder(support_input)
                     support_features = torch.stack(support_feature_list, dim=1)
                     support_features = attention_layer(support_features) ### [batch_size, (len(augmentations)+1)*D]
@@ -136,12 +148,26 @@ def training_loop(train_loader,validation_loader,experiment_config, hyperparamet
                     sorted_query_labels, indices = torch.sort(query_labels)
                     sorted_query_features = query_features[indices]
                     predictions = prototypical_inference(sorted_query_features = sorted_query_features, prototypes = prototype_list)
-
+                    labels_np = [label.cpu().numpy() for label in sorted_query_labels]
                     ## Compute validation accuracy:
-                    episode_accuracy = accuracy_score(predictions,sorted_query_labels)
+                    episode_accuracy = accuracy_score(predictions,labels_np)
                     accuracy_list.append(episode_accuracy)
         mean_accuracy = np.mean(accuracy_list)
-        print(f"Mean Validation Accuracy for epoch: {epoch} is ::: {mean_accuracy}")
+        print(f"Mean Validation Accuracy for epoch: {epoch} is ::: {mean_accuracy}, mean training loss  is ::: {epoch_loss}")
+        if mean_accuracy >= best_accuracy:
+            best_accuracy = mean_accuracy
+            best_encoder = encoder
+            best_attention_layer = attention_layer
+            best_projection_network = projection_network
+            best_epoch = epoch
+
+    print(f"Saving encoder, attention,and projection networks that performed  an accuracy of {best_accuracy} in the validation set at epoch {best_epoch}")
+    
+    torch.save(best_encoder,experiment_config['encoder_pt'] )
+    torch.save(best_attention_layer, experiment_config['attention_pt'])
+    torch.save(best_projection_network, experiment_config['projection_head_pt'])
+
+    
 
 
 
