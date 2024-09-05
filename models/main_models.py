@@ -37,11 +37,10 @@ class EncoderLinearSoftmax(nn.Module):
         self.config_file = config_file
         self.encoder ,self.model_config = get_encoder(encoder_name = config_file['encoder'])
         self.linear = nn.Linear(640, 64)  # Example input size of 1024
-        self.relu = nn.ReLU()
 
     def forward(self,x):
         encoded = self.encoder(x)
-        out = self.relu(self.linear(encoded))
+        out = self.linear(encoded)
         return out
 
 

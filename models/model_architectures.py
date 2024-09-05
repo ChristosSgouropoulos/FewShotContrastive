@@ -38,6 +38,30 @@ class MLP(nn.Module):
     def forward(self,x):
         return self.mlp(x)
     
+
+class ProjectionHead(nn.Module):
+    def __init__(self, input_dim=2560, hidden_dim=2560, output_dim=2560):
+        super(ProjectionHead, self).__init__()
+        
+        # Single layer: Keep the same dimension for input and output
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        
+        # Use Layer Normalization instead of Batch Normalization
+        self.ln1 = nn.LayerNorm(hidden_dim)
+        
+        # Output layer: Keep the dimension same as input_dim (2560)
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+        self.ln2 = nn.LayerNorm(output_dim)
+
+    def forward(self, x):
+        # Pass through the first layer and apply ReLU activation
+        x = F.relu(self.ln1(self.fc1(x)))
+
+        # Pass through the second layer
+        x = self.ln2(self.fc2(x))
+
+        return x
+    
 class CNN(nn.Module):
     def __init__(self,model_config):
         self.in_channels = model_config["CNN"]['in_channels']
@@ -206,19 +230,7 @@ def Res12(model_config ,**kwargs):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-class SelfAttention(nn.Module):
+class SelfAttention1(nn.Module):
     def __init__(self, model_config):
         super(SelfAttention, self).__init__()
         self.embed_dim = model_config['self_attention_embed_dim']
@@ -233,6 +245,30 @@ class SelfAttention(nn.Module):
         # Flatten the output to get the final embedding of dimension augmentations+original*D
         batch_size, seq_length, embed_dim = attn_output.shape
         output = attn_output.reshape(batch_size, seq_length * embed_dim)  # (batch_size, (augmentations+original) * D)
+        
+        return output
+    
+class SelfAttention(nn.Module):
+    def __init__(self, model_config):
+        super(SelfAttention, self).__init__()
+        self.embed_dim = model_config['self_attention_embed_dim']
+        self.num_heads = model_config['self_attention_num_heads']
+        self.multihead_attn = nn.MultiheadAttention(self.embed_dim, self.num_heads)
+        
+    def forward(self, x):
+        # Input x shape: (batch_size, 4, D)
+        
+        # Permute for MultiheadAttention: (seq_length, batch_size, embed_dim)
+        x = x.permute(1, 0, 2)  # (4, batch_size, D)
+        
+        # Apply self-attention
+        attn_output, _ = self.multihead_attn(x, x, x)  # (4, batch_size, D)
+        
+        # Permute back: (batch_size, 4, D)
+        attn_output = attn_output.permute(1, 0, 2)  # (batch_size, 4, D)
+        
+        # Channel-wise concatenation: Concatenate along the feature dimension to get (batch_size, 4 * D)
+        output = torch.cat([attn_output[:, i, :] for i in range(attn_output.size(1))], dim=-1)
         
         return output
     

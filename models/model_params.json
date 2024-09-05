@@ -56,7 +56,7 @@
     }
     ,
     "projection_head":{
-        "layers":[2560,5000],
+        "layers":[2560,2560],
         "out_features":2560,
         "in_features":2560,
         "drop_prob":0

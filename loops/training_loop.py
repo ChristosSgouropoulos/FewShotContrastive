@@ -1,7 +1,7 @@
 import os
 import sys
 sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from models.model_architectures import SelfAttention,MLP
+from models.model_architectures import SelfAttention,MLP,ProjectionHead
 from models.main_models import EncoderModule
 from loops.testing_loop import prototypical_inference
 from utils.augmentations import image_augmentations
@@ -19,6 +19,8 @@ def training_loop(train_loader,validation_loader,experiment_config, hyperparamet
     epochs = experiment_config['epochs'] 
     ## Get the encoder
     encoder = EncoderModule(config_file = experiment_config,augmentation_module = image_augmentations).to(device)
+    
+    ## Load weights if use a pretrained encoder
     if encoder_weights:
         state_dict = torch.load(encoder_weights)
         new_state_dict = {}
@@ -26,13 +28,16 @@ def training_loop(train_loader,validation_loader,experiment_config, hyperparamet
             new_key = "encoder." + key  # Prepend 'encoder.' to each key
             new_state_dict[new_key] = state_dict[key]
         encoder.load_state_dict(new_state_dict)
-        ## Get the model_config dictionary to use for attention
+
+    ## Get the model_config dictionary to use for attention
     model_config = encoder._get_model_config()
     attention_layer = SelfAttention(model_config = model_config).to(device)
     ## Initialize contrastive projection head
-    projection_network = MLP(model_config=model_config, purpose = "projection_head").to(device)
+    #projection_network = MLP(model_config=model_config, purpose = "projection_head").to(device)
+    projection_network= ProjectionHead().to(device)
     model_parameters = list(encoder.parameters()) + list(attention_layer.parameters()) + list(projection_network.parameters())
     optimizer = torch.optim.Adam(model_parameters, lr = 0.001)
+    ## Half learning rate every 20 epochs
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     ## Iterate data loader 
     best_accuracy = 0
@@ -41,6 +46,8 @@ def training_loop(train_loader,validation_loader,experiment_config, hyperparamet
     projection_network.train()
     for epoch in range(epochs):
         epoch_loss = 0
+        epoch_fewshot_loss = 0
+        epoch_contrastive_loss= 0
         with tqdm(enumerate(train_loader), total = len(train_loader), desc= "Training") as tqdm_train:
             for few_shot_batch in tqdm_train:
                 episode_index = few_shot_batch[0]
@@ -52,7 +59,7 @@ def training_loop(train_loader,validation_loader,experiment_config, hyperparamet
                 support_labels = support_labels.to(device)
                 query_input = query_input.to(device)
                 query_labels = query_labels.to(device)
-
+                ## Pass through encoder and attention_layer
                 support_feature_list = encoder(support_input)
                 support_features = torch.stack(support_feature_list, dim=1)
                 support_features = attention_layer(support_features) ### [batch_size, (len(augmentations)+1)*D]
@@ -75,7 +82,10 @@ def training_loop(train_loader,validation_loader,experiment_config, hyperparamet
                 sorted_query_labels, indices = torch.sort(query_labels)
                 sorted_query_features = query_features[indices]
                 ## Compute FSL_loss:
-                fewshot_loss = FSL_loss(prototypes = stacked_prototypes, query_features = sorted_query_features,query_labels = sorted_query_labels)
+                fewshot_loss = FSL_loss(prototypes = stacked_prototypes,
+                                         query_features = sorted_query_features,
+                                         query_labels = sorted_query_labels)
+
                 ## Now lets start making the contrastive part
                 ## Query features will again pass through the feature extractor get shuffled and pass through the attention layer again:
                 augmentations = query_feature_list[1:]
@@ -111,8 +121,13 @@ def training_loop(train_loader,validation_loader,experiment_config, hyperparamet
                 final_loss.backward()
                 optimizer.step()
                 epoch_loss +=final_loss
-        scheduler.step()
+                epoch_fewshot_loss+= fewshot_loss
+                epoch_contrastive_loss+=contrastive_loss
+
+        epoch_fewshot_loss = epoch_fewshot_loss/len(train_loader)
+        epoch_contrastive_loss = epoch_contrastive_loss/len(train_loader)
         epoch_loss = epoch_loss/len(train_loader)
+        scheduler.step()
         ### Validation Inference and evalutation
         encoder.eval()
         attention_layer.eval()
@@ -153,7 +168,8 @@ def training_loop(train_loader,validation_loader,experiment_config, hyperparamet
                     episode_accuracy = accuracy_score(predictions,labels_np)
                     accuracy_list.append(episode_accuracy)
         mean_accuracy = np.mean(accuracy_list)
-        print(f"Mean Validation Accuracy for epoch: {epoch} is ::: {mean_accuracy}, mean training loss  is ::: {epoch_loss}")
+
+        print(f"Mean Validation Accuracy for epoch: {epoch} is ::: {mean_accuracy}, mean training loss  is ::: {epoch_loss}, mean_fsl_loss is ::: {epoch_fewshot_loss}, mean_contrastive_loss is ::: {epoch_contrastive_loss}")
         if mean_accuracy >= best_accuracy:
             best_accuracy = mean_accuracy
             best_encoder = encoder

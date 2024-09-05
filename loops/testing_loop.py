@@ -8,7 +8,7 @@ from models.model_architectures import SelfAttention
 from tqdm import tqdm
 import numpy as np
 from sklearn.metrics import accuracy_score 
-def prototypical_inference(sorted_query_features,prototypes):
+def prototypical_inference1(sorted_query_features,prototypes):
     predictions = []
     for feature in sorted_query_features:
         distance_list = []
@@ -21,6 +21,22 @@ def prototypical_inference(sorted_query_features,prototypes):
         
         predictions.append(predicted_label)
     return predictions
+
+
+def prototypical_inference(sorted_query_features,prototypes):
+    predictions = []
+    for feature in sorted_query_features:
+        distance_list = []
+        for prototype in prototypes:
+            eucl_distance = torch.cdist(prototype.unsqueeze(0), feature.unsqueeze(0), p=2.0, compute_mode='use_mm_for_euclid_dist_if_necessary')
+            distance_list.append(eucl_distance)
+        ## Get the label of minimum distance:
+        distances = torch.tensor(distance_list)
+        probabilities = torch.softmax(-distances,dim = 0)
+        predicted_label = torch.argmax(probabilities).item()
+        predictions.append(predicted_label)
+    return predictions
+
 
 
 def testing_loop(test_loader, experiment_config,device):
