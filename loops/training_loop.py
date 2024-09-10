@@ -36,7 +36,7 @@ def training_loop(train_loader,validation_loader,experiment_config, hyperparamet
     #projection_network = MLP(model_config=model_config, purpose = "projection_head").to(device)
     projection_network= ProjectionHead().to(device)
     model_parameters = list(encoder.parameters()) + list(attention_layer.parameters()) + list(projection_network.parameters())
-    optimizer = torch.optim.Adam(model_parameters, lr = 0.001)
+    optimizer = torch.optim.Adam(model_parameters, lr = 0.0001)
     ## Half learning rate every 20 epochs
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     ## Iterate data loader 
@@ -76,8 +76,9 @@ def training_loop(train_loader,validation_loader,experiment_config, hyperparamet
                 stacked_prototypes = torch.stack(prototype_list, dim = 0) ## [num_of_classses,D]
                 ## Now forward pass query set
                 query_feature_list = encoder(query_input)
-                query_features = torch.stack(query_feature_list,dim = 1)
-                query_features = attention_layer(query_features)
+                
+                query_features = torch.stack(query_feature_list,dim = 1)# Batch,4,640
+                query_features = attention_layer(query_features) 
                 ## Okay now need to sort query features by the labels
                 sorted_query_labels, indices = torch.sort(query_labels)
                 sorted_query_features = query_features[indices]
@@ -85,6 +86,8 @@ def training_loop(train_loader,validation_loader,experiment_config, hyperparamet
                 fewshot_loss = FSL_loss(prototypes = stacked_prototypes,
                                          query_features = sorted_query_features,
                                          query_labels = sorted_query_labels)
+
+                
 
                 ## Now lets start making the contrastive part
                 ## Query features will again pass through the feature extractor get shuffled and pass through the attention layer again:
@@ -95,7 +98,7 @@ def training_loop(train_loader,validation_loader,experiment_config, hyperparamet
                 sorted_query_features_contrastive = query_features_contrastive[indices]
                 ## Now we will have to iterate over the labels of the query set again.
                 contrastive_loss = 0
-                for i  in range(len(unique_labels)):
+                for i  in range(len(unique_labels)): 
                     label = unique_labels[i]
                     positive_label_indices = (sorted_query_labels == label).nonzero(as_tuple=True)[0]
                     positive_examples = sorted_query_features_contrastive[positive_label_indices]
@@ -119,15 +122,19 @@ def training_loop(train_loader,validation_loader,experiment_config, hyperparamet
                 contrastive_loss = contrastive_loss/(len(unique_labels)*len(query_features_contrastive))
                 final_loss = fewshot_loss+ hyperparameter_lambda*contrastive_loss
                 final_loss.backward()
+                #torch.nn.utils.clip_grad_norm_(model_parameters, max_norm=1.0)
                 optimizer.step()
                 epoch_loss +=final_loss
                 epoch_fewshot_loss+= fewshot_loss
                 epoch_contrastive_loss+=contrastive_loss
-
+                if torch.isnan(contrastive_loss):
+                    print(fewshot_loss)
         epoch_fewshot_loss = epoch_fewshot_loss/len(train_loader)
         epoch_contrastive_loss = epoch_contrastive_loss/len(train_loader)
         epoch_loss = epoch_loss/len(train_loader)
         scheduler.step()
+
+
         ### Validation Inference and evalutation
         encoder.eval()
         attention_layer.eval()

@@ -3,6 +3,7 @@ import sys
 import json
 sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import torch
+import torch.nn.functional as F
 from models.main_models import EncoderModule
 from models.model_architectures import SelfAttention
 from tqdm import tqdm

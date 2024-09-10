@@ -25,8 +25,9 @@ def FSL_loss(prototypes, query_features,query_labels):
 def cos_similarity(prototype,query_feature_contrastive, projection_head_model, hyperparameter_T):
     """Prototype of dim D, query_feature of Dimension D"""
     projected_query_feature = projection_head_model(query_feature_contrastive.unsqueeze(0))
+    projected_prototype = projection_head_model(prototype.unsqueeze(0))
     cos = nn.CosineSimilarity()
-    cosim = torch.exp(cos(prototype.unsqueeze(0), projected_query_feature)/hyperparameter_T)
+    cosim = torch.exp(cos(projected_prototype, projected_query_feature)/hyperparameter_T)
     
     return cosim
 

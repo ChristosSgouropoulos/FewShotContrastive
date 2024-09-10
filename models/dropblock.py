@@ -1,15 +1,19 @@
 import torch
+import sys
+import os
 import torch.nn.functional as F
 from torch import nn
 from torch.distributions import Bernoulli
+sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 
 class DropBlock(nn.Module):
     def __init__(self, block_size):
         super(DropBlock, self).__init__()
-
         self.block_size = block_size
-
+        GPU_INDEX = 1
+        self.device = torch.device(f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
     def forward(self, x, gamma):
         # shape: (bsize, channels, height, width)
 
@@ -17,8 +21,7 @@ class DropBlock(nn.Module):
             batch_size, channels, height, width = x.shape
             bernoulli = Bernoulli(gamma)
             mask = bernoulli.sample((batch_size, channels, height - (self.block_size - 1), width - (self.block_size - 1)))
-            if torch.cuda.is_available():
-                mask = mask.cuda()
+            mask = mask.to(self.device)
             block_mask = self._compute_block_mask(mask)
             countM = block_mask.size()[0] * block_mask.size()[1] * block_mask.size()[2] * block_mask.size()[3]
             count_ones = block_mask.sum()
@@ -42,8 +45,7 @@ class DropBlock(nn.Module):
             ]
         ).t()
         offsets = torch.cat((torch.zeros(self.block_size**2, 2).long(), offsets.long()), 1)
-        if torch.cuda.is_available():
-            offsets = offsets.cuda()
+        offsets = offsets.to(self.device)
 
         if nr_blocks > 0:
             non_zero_idxs = non_zero_idxs.repeat(self.block_size ** 2, 1)

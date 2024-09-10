@@ -40,7 +40,7 @@ class MLP(nn.Module):
     
 
 class ProjectionHead(nn.Module):
-    def __init__(self, input_dim=2560, hidden_dim=2560, output_dim=2560):
+    def __init__(self, input_dim=2560, hidden_dim=1280, output_dim=2560):
         super(ProjectionHead, self).__init__()
         
         # Single layer: Keep the same dimension for input and output
@@ -49,59 +49,100 @@ class ProjectionHead(nn.Module):
         # Use Layer Normalization instead of Batch Normalization
         self.ln1 = nn.LayerNorm(hidden_dim)
         
-        # Output layer: Keep the dimension same as input_dim (2560)
         self.fc2 = nn.Linear(hidden_dim, output_dim)
         self.ln2 = nn.LayerNorm(output_dim)
 
     def forward(self, x):
         # Pass through the first layer and apply ReLU activation
-        x = F.relu(self.ln1(self.fc1(x)))
-
+        x = F.relu(self.fc1(x))
         # Pass through the second layer
-        x = self.ln2(self.fc2(x))
+        x = self.fc2(x)
+        x_norm = F.normalize(x, p=2.0, dim=1, eps=1e-12, out=None)
 
+        return x_norm
+
+
+class Conv4_64(nn.Module):
+    def __init__(self,input_channels=3):
+        super(Conv4_64, self).__init__()
+        
+        # Define the 4 convolutional layers, each with 64 filters
+        self.conv1 = nn.Conv2d(input_channels, 64, kernel_size=3, padding=1)  # Conv layer 1
+        self.bn1 = nn.BatchNorm2d(64)
+        
+        self.conv2 = nn.Conv2d(64, 64, kernel_size=3, padding=1)              # Conv layer 2
+        self.bn2 = nn.BatchNorm2d(64)
+        
+        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, padding=1)              # Conv layer 3
+        self.bn3 = nn.BatchNorm2d(64)
+        
+        self.conv4 = nn.Conv2d(64, 64, kernel_size=3, padding=1)              # Conv layer 4
+        self.bn4 = nn.BatchNorm2d(64)
+        
+
+    def forward(self, x):
+        # Block 1: Conv -> BatchNorm -> ReLU -> MaxPool
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.max_pool2d(x, 2)
+        
+        # Block 2: Conv -> BatchNorm -> ReLU -> MaxPool
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.max_pool2d(x, 2)
+        
+        # Block 3: Conv -> BatchNorm -> ReLU -> MaxPool
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = F.max_pool2d(x, 2)
+        
+        # Block 4: Conv -> BatchNorm -> ReLU -> MaxPool
+        x = F.relu(self.bn4(self.conv4(x)))
+        x = F.max_pool2d(x, 2)
+        
+        # Flatten the tensor to pass into the fully connected layer
+        x = F.adaptive_avg_pool2d(x, (1, 1))  # GAP reduces the spatial dimensions to 1x1
+        x = x.view(x.size(0), -1) 
+        
         return x
-    
-class CNN(nn.Module):
-    def __init__(self,model_config):
-        self.in_channels = model_config["CNN"]['in_channels']
-        self.layers_conv = model_config["CNN"]['layers_conv']
-        self.channels = model_config["CNN"]['channels']
-        self.kernel_size = model_config["CNN"]['kernel_size']
-        self.strides = model_config["CNN"]['strides']
-        self.padding = model_config["CNN"]['padding']
-        self.pool_size = model_config["CNN"]['pool_size']
-        self.drop_prob = model_config["CNN"]['drop_prob']
-        self.pooling = model_config["CNN"]['pooling']
 
-        self.features = self.create_network()
+class Conv4_512(nn.Module):
+    def __init__(self,input_channels=3):
+        super(Conv4_512, self).__init__()
+        
+        # Define the 4 convolutional layers, each with 64 filters
+        self.conv1 = nn.Conv2d(input_channels, 64, kernel_size=3, padding=1)  # Conv layer 1
+        self.bn1 = nn.BatchNorm2d(64)
+        
+        self.conv2 = nn.Conv2d(64, 64, kernel_size=3, padding=1)              # Conv layer 2
+        self.bn2 = nn.BatchNorm2d(64)
+        
+        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, padding=1)              # Conv layer 3
+        self.bn3 = nn.BatchNorm2d(64)
+        
+        self.conv4 = nn.Conv2d(64, 512, kernel_size=3, padding=1)              # Conv layer 4
+        self.bn4 = nn.BatchNorm2d(512)
+        
 
-    def create_network(self):
-        modules_conv = []
-        in_channels = self.in_channels
-
-        for i_conv in range(self.layers_conv):
-            modules_conv.append(nn.Conv2d(in_channels,
-                                            self.channels[i_conv],
-                                            stride = self.strides[i_conv],
-                                            padding = self.padding))
-            modules_conv.append(nn.BatchNorm2d(self.channels[i_conv]))
-            modules_conv.append(nn.ReLu())
-            if self.pooling[i_conv]:
-                modules_conv.append(nn.MaxPool2d(self.pool_size[0],self.pool_size[1]))
-            modules_conv.append(nn.Dropout(p = self.drop_prob_conv))
-            in_channels = self.channels[i_conv]
-        modules_conv.append(nn.AdaptiveAvgPool2d(output_size= (1,1)))
-        return nn.Sequential(*modules_conv)
-
-    def forward(self,x):
-        batch_size,feature_size = x.size(0),self.channels[-1]
-        out = self.features(x)
-        out = out.view(batch_size,feature_size)
-
-        return out
-    
-
+    def forward(self, x):
+        # Block 1: Conv -> BatchNorm -> ReLU -> MaxPool
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.max_pool2d(x, 2)
+        
+        # Block 2: Conv -> BatchNorm -> ReLU -> MaxPool
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.max_pool2d(x, 2)
+        
+        # Block 3: Conv -> BatchNorm -> ReLU -> MaxPool
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = F.max_pool2d(x, 2)
+        
+        # Block 4: Conv -> BatchNorm -> ReLU -> MaxPool
+        x = F.relu(self.bn4(self.conv4(x)))
+        x = F.max_pool2d(x, 2)
+        
+        # Flatten the tensor to pass into the fully connected layer
+        x = F.adaptive_avg_pool2d(x, (1, 1))  # GAP reduces the spatial dimensions to 1x1
+        x = x.view(x.size(0), -1) 
+        
+        return x
 
 
 # This ResNet network was designed following the practice of the following papers:
@@ -228,27 +269,35 @@ def Res12(model_config ,**kwargs):
     return model
 
 
-
-
-class SelfAttention1(nn.Module):
+class SelfAttention(nn.Module):
     def __init__(self, model_config):
         super(SelfAttention, self).__init__()
         self.embed_dim = model_config['self_attention_embed_dim']
         self.num_heads = model_config['self_attention_num_heads']
-        self.multihead_attn = nn.MultiheadAttention(self.embed_dim, self.num_heads)
+        self.ffn_dim = model_config['self_attention_ffn_dim']
+        self.dropout = model_config['dropout']
+
+        # TransformerEncoderLayer: includes MultiheadAttention, FeedForward, and LayerNorm
+        self.encoder_layer = nn.TransformerEncoderLayer(
+            d_model=self.embed_dim,
+            nhead=self.num_heads,
+            dim_feedforward=self.ffn_dim,
+            dropout=self.dropout,
+            batch_first=True  # Makes the layer expect input as (batch_size, seq_length, embed_dim)
+        )
         
-    def forward(self,x):
-        x = x.permute(1, 0, 2)  # (augmentations+original, batch_size, embed_dim)
-        attn_output, _ = self.multihead_attn(x, x, x)
-        attn_output = attn_output.permute(1, 0, 2)  # (batch_size, augmentations+original, embed_dim)
+    def forward(self, x):
+        # Input x shape: (batch_size, 4, D)
         
-        # Flatten the output to get the final embedding of dimension augmentations+original*D
-        batch_size, seq_length, embed_dim = attn_output.shape
-        output = attn_output.reshape(batch_size, seq_length * embed_dim)  # (batch_size, (augmentations+original) * D)
+        # Pass input through TransformerEncoderLayer
+        attn_output = self.encoder_layer(x)  # Output shape: (batch_size, 4, D)
+        
+        # Channel-wise concatenation: Concatenate along the feature dimension to get (batch_size, 4 * D)
+        output = torch.cat([attn_output[:, i, :] for i in range(attn_output.size(1))], dim=-1)
         
         return output
-    
-class SelfAttention(nn.Module):
+
+class SelfAttention1(nn.Module):
     def __init__(self, model_config):
         super(SelfAttention, self).__init__()
         self.embed_dim = model_config['self_attention_embed_dim']
@@ -277,13 +326,39 @@ if __name__ == '__main__':
     ### Check  ResNet
     with open("models/model_params.json", "r") as f:
         model_config = json.load(f)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    inpt_img = torch.rand(10,3,84,84)
-    inpt_img = inpt_img.to(device)
-    model = Res12(model_config)
-    model.to(device)
-    out_feat = model(inpt_img)
-    print("Resnet",out_feat.size())
+
+    gpu_index = 1
+    device = torch.device(f'cuda:{gpu_index}' if torch.cuda.is_available() else 'cpu')
+    print(device)
+    
+
+    inpt_img1 = torch.rand(10,3,84,84)
+    inpt_img1 = inpt_img1.to(device)
+    inpt_img2 = torch.rand(10,3,84,84)
+    inpt_img2 = inpt_img2.to(device)
+    inpt_img3 = torch.rand(10,3,84,84)
+    inpt_img3 = inpt_img3.to(device)
+    inpt_img4 = torch.rand(10,3,84,84)
+    inpt_img4 = inpt_img4.to(device)
+
+    print(inpt_img1)
+    model = Res12(model_config).to(device)
+    print(next(model.parameters()).device)
+    out_feat1 = model(inpt_img1)
+    out_feat2 = model(inpt_img2)
+    out_feat3 = model(inpt_img3)
+    out_feat4 = model(inpt_img4)
 
 
 
+    print("Resnet",out_feat1.size())
+
+    modela = Conv4_512(input_channels = 3).to(device)
+    out_feata = modela(inpt_img1)
+    print("Conv4_64",out_feata.size())
+
+    out_feats = torch.stack([out_feat1,out_feat2,out_feat3,out_feat4], dim =1)
+    print(out_feats.size()) 
+    attention = SelfAttention(model_config = model_config).to(device)
+    after_attention = attention(out_feats)
+    print(after_attention.size())

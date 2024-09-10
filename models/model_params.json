@@ -1,46 +1,4 @@
 {
-    "CNN":{
-            "layers": 2,
-            "in_channels": 3,
-            "channels": [
-                32,
-                64
-                
-            ],
-            "linear_size": 64,
-            "kernel_size": [
-                [
-                    3,
-                    3
-                ], 
-                [
-                    3,
-                    3
-                ],
-                [
-                    3,
-                    3
-                ]
-            ],
-            "strides": [
-                1,
-                1,
-                1
-            ],
-            "padding": 1,
-            "activation": "relu",
-            "pool_size": [
-                2,
-                2,
-                2
-            ],
-            "pooling": [
-                true,
-                true,
-                true
-            ],
-            "drop_prob": 0.3
-        },
 
     "Res12":{
         "keep_prob":1.0,
@@ -55,12 +13,6 @@
         "drop_prob": 0.3
     }
     ,
-    "projection_head":{
-        "layers":[2560,2560],
-        "out_features":2560,
-        "in_features":2560,
-        "drop_prob":0
-    },
 
     "linear_contrastive":{
         "layers": [32,12],
@@ -69,8 +21,10 @@
         "drop_prob": 0.3
     },
 
-    "self_attention_num_heads": 4,
-    "self_attention_embed_dim": 640
+    "self_attention_num_heads": 1,
+    "self_attention_embed_dim": 640,
+    "self_attention_ffn_dim":256,
+    "dropout":0.1
 
 }
 

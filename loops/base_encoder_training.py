@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 print(device)
 mini_imagenet_84_path = "../../../data/mini_imagenet/images"
 experiment_config = "src/experiment_config.json"

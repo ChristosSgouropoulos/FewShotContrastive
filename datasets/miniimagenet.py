@@ -18,6 +18,7 @@ class MiniImageNet(FewShotDataset):
         root: Union[Path, str],
         split: Optional[str] = None,
         specs_file: Optional[Union[Path, str]] = None,
+        IMAGENET_NORMALIZATION ={"mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]}
     ):
         """
         Build the miniImageNet dataset from specific specs file. By default all images are loaded
@@ -48,6 +49,7 @@ class MiniImageNet(FewShotDataset):
         self.root = Path(root)
         self.data_df = self.load_specs(split, specs_file)
         self.images = self.data_df.image_path.tolist()
+        self.IMAGENET_NORMALIZATION = IMAGENET_NORMALIZATION
 
         self.class_names = self.data_df.label.unique()
         self.class_to_label = {v: k for k, v in enumerate(self.class_names)}
@@ -59,7 +61,8 @@ class MiniImageNet(FewShotDataset):
     def __getitem__(self, item):
         transform = transforms.Compose([
         transforms.Resize((84, 84)), 
-        transforms.ToTensor()])
+        transforms.ToTensor(),
+        transforms.Normalize(**self.IMAGENET_NORMALIZATION)])
         img = Image.open(self.data_df.image_path[item]).convert("RGB")
         tensor_img = transform(img)
         return tensor_img, self.labels[item]
