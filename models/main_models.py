@@ -1,11 +1,9 @@
 import os
 import sys
 sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import torch
-import random
 import torch.nn as nn
 import json
-from models.model_architectures import CNN,MLP,SelfAttention,Res12
+from models.model_architectures import Res12,Conv4_64,Conv4_512
 from utils.augmentations import image_augmentations,audio_augmentations
 
 
@@ -48,8 +46,10 @@ class EncoderLinearSoftmax(nn.Module):
 def get_encoder(encoder_name):
     with open("models/model_params.json", "r") as f:
         model_config = json.load(f)
-    if encoder_name == 'CNN':
-        encoder = CNN(model_config = model_config)
+    if encoder_name == 'conv4-64':
+        encoder = Conv4_64(input_channels =3)
+    elif encoder_name == 'conv4-512':
+        encoder = Conv4_512(input_channels = 3)
     elif encoder_name == 'ResNet':
         encoder = Res12(model_config = model_config)
     return encoder,model_config
